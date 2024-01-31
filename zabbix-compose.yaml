@@ -1,0 +1,134 @@
+version: '3.5'
+
+services:
+
+  server:
+    image: zabbix/zabbix-server-pgsql:alpine-6.4.3
+    container_name: zabbix-server
+    ports:
+      - "10051:10051"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./zbx_env/usr/lib/zabbix/alertscripts:/usr/lib/zabbix/alertscripts:ro
+      - ./zbx_env/usr/lib/zabbix/externalscripts:/usr/lib/zabbix/externalscripts:ro
+      - ./zbx_env/var/lib/zabbix/export:/var/lib/zabbix/export:rw
+      - ./zbx_env/var/lib/zabbix/modules:/var/lib/zabbix/modules:ro
+      - ./zbx_env/var/lib/zabbix/enc:/var/lib/zabbix/enc:ro
+      - ./zbx_env/var/lib/zabbix/ssh_keys:/var/lib/zabbix/ssh_keys:ro
+      - ./zbx_env/var/lib/zabbix/mibs:/var/lib/zabbix/mibs:ro
+      - ./zbx_env/var/lib/zabbix/snmptraps:/var/lib/zabbix/snmptraps:ro
+    restart: always
+    depends_on:
+      - postgres-server
+    environment:
+      - POSTGRES_USER=uzbxpg
+      - POSTGRES_PASSWORD=z4bb1x.2023
+      - POSTGRES_DB=zabbixdb
+      - ZBX_HISTORYSTORAGETYPES=log,text #Zabbix configuration variables
+      - ZBX_DEBUGLEVEL=1
+      - ZBX_HOUSEKEEPINGFREQUENCY=1
+      - ZBX_MAXHOUSEKEEPERDELETE=5000
+      - ZBX_PROXYCONFIGFREQUENCY=3600
+
+  web-nginx-pgsql:
+    image: zabbix/zabbix-web-nginx-pgsql:alpine-6.4.3
+    container_name: zabbix-web
+    ports:
+      - "8081:8081"
+      - "8443:8443"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./zbx_env/etc/ssl/nginx:/etc/ssl/nginx:ro
+      - ./zbx_env/usr/share/zabbix/modules/:/usr/share/zabbix/modules/:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    sysctls:
+      - net.core.somaxconn=65535
+    restart: always
+    depends_on:
+      - server
+      - postgres-server
+    environment:
+      - POSTGRES_USER=uzbxpg
+      - POSTGRES_PASSWORD=z4bb1x.2023
+      - POSTGRES_DB=zabbixdb
+      - ZBX_SERVER_HOST=server
+      - ZBX_POSTMAXSIZE=64M
+      - PHP_TZ=America/Argentina/Buenos_Aires
+      - ZBX_MAXEXECUTIONTIME=500
+
+  agent:
+    image: zabbix/zabbix-agent:alpine-6.4.3
+    container_name: zabbix-agent
+    ports:
+      - "10055:10055"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ./zbx_env/etc/zabbix/zabbix_agentd.d:/etc/zabbix/zabbix_agentd.d:ro
+      - ./zbx_env/var/lib/zabbix/modules:/var/lib/zabbix/modules:ro
+      - ./zbx_env/var/lib/zabbix/enc:/var/lib/zabbix/enc:ro
+      - ./zbx_env/var/lib/zabbix/ssh_keys:/var/lib/zabbix/ssh_keys:ro
+    privileged: true
+    pid: "host"
+    restart: always
+    depends_on:
+      - server
+    environment:
+      - ZBX_SERVER_HOST=server
+      - ZBX_HOSTNAME=zabbix-agent
+
+  snmptraps:
+    image: zabbix/zabbix-snmptraps:alpine-6.4.3
+    container_name: zabbix-snmptraps
+    ports:
+      - "162:1162/udp"
+    volumes:
+      - ./snmptraps:/var/lib/zabbix/snmptraps:rw
+    restart: always
+    depends_on:
+      - server
+    environment:
+      - ZBX_SERVER_HOST=server
+
+  postgres-server:
+    image: postgres:14-alpine
+    container_name: zabbix-db
+    volumes:
+      - ./zbx_env/var/lib/postgresql/data:/var/lib/postgresql/data:rw
+      - ./.ZBX_DB_CA_FILE:/run/secrets/root-ca.pem:ro
+      - ./.ZBX_DB_CERT_FILE:/run/secrets/server-cert.pem:ro
+      - ./.ZBX_DB_KEY_FILE:/run/secrets/server-key.pem:ro
+    environment:
+      - POSTGRES_USER=uzbxpg
+      - POSTGRES_PASSWORD=z4bb1x.2023
+      - POSTGRES_DB=zabbixdb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+ 
+  java-gateway:
+    image: zabbix/zabbix-java-gateway
+    container_name: zabbix-java-gateway
+    restart: always
+    ports:
+     - "10052:10052"
+    environment:
+     - ZBX_START_POLLERS=5
+     - ZBX_TIMEOUT=3
+     - ZBX_DEBUGLEVEL=info
+    depends_on:
+     - server
+     - postgres-server
+
+   
+
+
