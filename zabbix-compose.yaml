@@ -35,7 +35,7 @@ services:
     image: zabbix/zabbix-web-nginx-pgsql:alpine-6.4.3
     container_name: zabbix-web
     ports:
-      - "8081:8081"
+      - "8080:8080"
       - "8443:8443"
     volumes:
       - /etc/localtime:/etc/localtime:ro
