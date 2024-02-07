@@ -8,7 +8,7 @@ services:
     ports:
       - "10051:10051"
     volumes:
-      - ./zbx_env/etc/zabbix/zabbix_server.conf:/etc/zabbix/zabbix_server.conf
+      - /home/nico/zabbix-server-conf:/etc/zabbix
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
       - ./zbx_env/usr/lib/zabbix/alertscripts:/usr/lib/zabbix/alertscripts:ro
@@ -72,7 +72,6 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
-      - ./zbx_env/etc/zabbix/zabbix_agentd.d:/etc/zabbix/zabbix_agentd.d:ro
       - ./zbx_env/var/lib/zabbix/modules:/var/lib/zabbix/modules:ro
       - ./zbx_env/var/lib/zabbix/enc:/var/lib/zabbix/enc:ro
       - ./zbx_env/var/lib/zabbix/ssh_keys:/var/lib/zabbix/ssh_keys:ro
@@ -111,7 +110,7 @@ services:
       - POSTGRES_PASSWORD=z4bb1x.2023
       - POSTGRES_DB=zabbixdb
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready"]
+      test: ["CMD-SHELL", "pg_isready -d $POSTGRES_DB -U $POSTGRES_USER"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -131,5 +130,7 @@ services:
      - postgres-server
 
    
-
+volumes:
+  zabbix-server-conf:
+    external: true
 
