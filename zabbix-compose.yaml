@@ -154,7 +154,8 @@ services:
     depends_on:
      - server
      - postgres-server
-
+    environment:
+     - GF_INSTALL_PLUGINS=alexanderzobnin-zabbix-app
 
 volumes:
   zbx-srv-conf-vol:
