@@ -1,16 +1,20 @@
+######################################################
+# Zabbix 6.4 para desplegar en Docker-Compose ATOS-CES
+######################################################
+
 version: '3.5'
 
 services:
 
   server:
-    image: zabbix/zabbix-server-pgsql:alpine-6.4.3
+    image: zabbix/zabbix-server-pgsql-odbc18:alpine-6.4.3
     container_name: zabbix-server
     ports:
-      - "10051:10051"
+      - "10050:10051"
     volumes:
-      - /home/nico/zabbix-server-conf:/etc/zabbix
+      - /opt/docker/deploy-zbx-64/zbx_env/zbx-srv-conf-vol:/etc/zabbix
       - /etc/localtime:/etc/localtime:ro
-      - /etc/timezone:/etc/timezone:ro
+      - /etc/timezone:/etc/timezone:ro 
       - ./zbx_env/usr/lib/zabbix/alertscripts:/usr/lib/zabbix/alertscripts:ro
       - ./zbx_env/usr/lib/zabbix/externalscripts:/usr/lib/zabbix/externalscripts:ro
       - ./zbx_env/var/lib/zabbix/export:/var/lib/zabbix/export:rw
@@ -19,18 +23,21 @@ services:
       - ./zbx_env/var/lib/zabbix/ssh_keys:/var/lib/zabbix/ssh_keys:ro
       - ./zbx_env/var/lib/zabbix/mibs:/var/lib/zabbix/mibs:ro
       - ./zbx_env/var/lib/zabbix/snmptraps:/var/lib/zabbix/snmptraps:ro
+     
     restart: always
     depends_on:
       - postgres-server
     environment:
-      - POSTGRES_USER=uzbxpg
-      - POSTGRES_PASSWORD=z4bb1x.2023
-      - POSTGRES_DB=zabbixdb
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
       - ZBX_HISTORYSTORAGETYPES=log,text #Zabbix configuration variables
       - ZBX_DEBUGLEVEL=1
       - ZBX_HOUSEKEEPINGFREQUENCY=1
       - ZBX_MAXHOUSEKEEPERDELETE=5000
       - ZBX_PROXYCONFIGFREQUENCY=3600
+
+
 
   web-nginx-pgsql:
     image: zabbix/zabbix-web-nginx-pgsql:alpine-6.4.3
@@ -56,22 +63,26 @@ services:
       - server
       - postgres-server
     environment:
-      - POSTGRES_USER=uzbxpg
-      - POSTGRES_PASSWORD=z4bb1x.2023
-      - POSTGRES_DB=zabbixdb
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
       - ZBX_SERVER_HOST=server
       - ZBX_POSTMAXSIZE=64M
       - PHP_TZ=America/Argentina/Buenos_Aires
       - ZBX_MAXEXECUTIONTIME=500
 
+
+
+
   agent:
     image: zabbix/zabbix-agent:alpine-6.4.3
     container_name: zabbix-agent
     ports:
-      - "10055:10055"
+      - "10055:10050"
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
+      - ./zbx_env/etc/zabbix/zabbix_agentd.d:/etc/zabbix/zabbix_agentd.d:ro
       - ./zbx_env/var/lib/zabbix/modules:/var/lib/zabbix/modules:ro
       - ./zbx_env/var/lib/zabbix/enc:/var/lib/zabbix/enc:ro
       - ./zbx_env/var/lib/zabbix/ssh_keys:/var/lib/zabbix/ssh_keys:ro
@@ -82,20 +93,24 @@ services:
       - server
     environment:
       - ZBX_SERVER_HOST=server
-      - ZBX_HOSTNAME=zabbix-agent
+      - ZBX_HOSTNAME=${ZBX_HOSTNAME}
+
 
   snmptraps:
-    image: zabbix/zabbix-snmptraps:alpine-6.4.3
+    image: zabbix/zabbix-snmptraps:latest
     container_name: zabbix-snmptraps
     ports:
       - "162:1162/udp"
     volumes:
+      - /opt/docker/deploy-zbx-64/zbx_env/snmptraps-config:/etc/snmp
       - ./snmptraps:/var/lib/zabbix/snmptraps:rw
     restart: always
     depends_on:
       - server
     environment:
       - ZBX_SERVER_HOST=server
+
+
 
   postgres-server:
     image: postgres:14-alpine
@@ -106,19 +121,19 @@ services:
       - ./.ZBX_DB_CERT_FILE:/run/secrets/server-cert.pem:ro
       - ./.ZBX_DB_KEY_FILE:/run/secrets/server-key.pem:ro
     environment:
-      - POSTGRES_USER=uzbxpg
-      - POSTGRES_PASSWORD=z4bb1x.2023
-      - POSTGRES_DB=zabbixdb
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d $POSTGRES_DB -U $POSTGRES_USER"]
       interval: 10s
       timeout: 5s
       retries: 5
- 
+    
+
   java-gateway:
-    image: zabbix/zabbix-java-gateway
+    image: zabbix/zabbix-java-gateway:alpine-6.4.3
     container_name: zabbix-java-gateway
-    restart: always
     ports:
      - "10052:10052"
     environment:
@@ -128,9 +143,27 @@ services:
     depends_on:
      - server
      - postgres-server
+    restart: always
 
-   
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+     - "3000:3000"
+    restart: always
+    depends_on:
+     - server
+     - postgres-server
+
+
 volumes:
-  zabbix-server-conf:
+  zbx-srv-conf-vol:
+    external: true
+  snmptraps-config:
     external: true
 
+
+networks:
+  zbx_default_64:
+
+   
